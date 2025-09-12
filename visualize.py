@@ -6,9 +6,9 @@ import os
 INT_SIZE = 4
 TPAIR_SIZE = INT_SIZE * 2
 
-def load_grammar(rules_filepath):
+def load_rlz_repair_grammar(rules_filepath):
     """
-    Loads a RePair grammar from the .R file.
+    Loads a RLZ-RePair grammar from the .R file.
 
     The binary file is expected to be structured as follows:
     1. Alphabet Size (int): A 4-byte integer ('alpha') specifying the number
@@ -66,6 +66,62 @@ def load_grammar(rules_filepath):
 
         print("Grammar loaded successfully.\n")
         return grammar
+
+def load_bigrepair_grammar(rules_filepath):
+    """
+    Loads a BigRePair grammar from the .R file.
+
+    The binary file is expected to be structured as follows:
+    1. Alphabet Size (int): A 4-byte integer ('alpha') specifying the number
+       of terminal symbols.
+    2. Rules (bytes): A sequence of rules, where each rule is 8 bytes
+       (a pair of 4-byte integers representing two symbol IDs).
+
+    Args:
+        rules_filepath (str): The path to the grammar's .rules file.
+
+    Returns:
+        dict: A dictionary representing the complete grammar.
+              - Non-terminal IDs map to a tuple of two symbol IDs.
+              - Terminal IDs map to their single byte representation.
+    
+    Raises:
+        IOError: If the file is malformed, truncated, or cannot be read.
+    """
+    # Get the size of the rules file
+    rules_size = os.path.getsize(rules_filepath)
+    with open(rules_filepath, 'rb') as f:
+        # Get the size of the original alphabet
+        alpha_bytes = f.read(INT_SIZE)
+        if len(alpha_bytes) < INT_SIZE:
+            raise IOError(f"Error: Cannot read alphabet from rules file {rules_filepath}")
+        alpha = int.from_bytes(alpha_bytes, 'little')
+        # Calculate the number of rules
+        num_rules = (rules_size - INT_SIZE) // TPAIR_SIZE
+        # Read the block rules data
+        rules_bytes = f.read(num_rules * TPAIR_SIZE)
+        if len(rules_bytes) < num_rules * TPAIR_SIZE:
+            raise IOError(f"Error: Truncated rules data in {rules_filepath}")
+        # Generate the grammar
+        grammar = {}
+        # Generate the rules for the terminal symbols
+        for i in range(alpha):
+            grammar[i] = char_map[i:i+1]
+        # Generate the rules for the non-terminal symbols
+        for i in range(num_rules):
+            rule_id = alpha + i
+            # Get the 8-byte slice for the current rule
+            start_index = i * TPAIR_SIZE
+            end_index = start_index + TPAIR_SIZE
+            rule_chunk = rules_bytes[start_index:end_index]
+            # Unpack the two symbols from the 8-byte chunk
+            s1 = int.from_bytes(rule_chunk[0:INT_SIZE], 'little')
+            s2 = int.from_bytes(rule_chunk[INT_SIZE:TPAIR_SIZE], 'little')
+            grammar[rule_id] = (s1, s2)
+
+        print("Grammar loaded successfully.\n")
+        return grammar
+
 
 def format_symbol(symbol_id, grammar):
     """Formats a symbol ID for printing based on its type."""
@@ -194,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', "--rules", type=str, help="Path to grammar rule file.", required=True)
     parser.add_argument("-o", "--output", type=str, help="Prefix of output file.", default="parse_tree")
     parser.add_argument("-e", "--extension", type=str, help="Image file extension (e.g., png, svg).", default="png")
+    parser.add_argument("-p", "--program", type=str, help="Compression program used (rlz-repair, bigrepair).", default="rlz-repair")
     args = parser.parse_args()
 
     print(f"Compressed sequence file location: {args.sequence}")
@@ -201,11 +258,14 @@ if __name__ == "__main__":
     print(f"Output file prefix: {args.output}")
     print(f"Output file extension: {args.extension}\n")
 
-    
-    parsed_grammar = load_grammar(args.rules)
-    print_grammar(parsed_grammar)
+    if (args.program == "rlz-repair"):
+        parsed_grammar = load_rlz_repair_grammar(args.rules)
+    else:
+        parsed_grammar = load_bigrepair_grammar(args.rules)
+
+    #print_grammar(parsed_grammar)
     compressed_sequence = load_compressed_str(args.sequence)
-    print_compressed_str(compressed_sequence)
+    #print_compressed_str(compressed_sequence)
 
     # Initialize the graph object (Digraph for Directed Graph)
     dot = graphviz.Digraph(comment='RePair Parse Tree')
