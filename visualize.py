@@ -7,9 +7,9 @@ import sys
 INT_SIZE = 4
 TPAIR_SIZE = INT_SIZE * 2
 
-def load_rlz_repair_grammar(rules_filepath):
+def load_original_repair_grammar(rules_filepath):
     """
-    Loads a RLZ-RePair grammar from the .R file.
+    Loads an original RePair grammar from the .R file.
 
     The binary file is expected to be structured as follows:
     1. Alphabet Size (int): A 4-byte integer ('alpha') specifying the number
@@ -68,9 +68,9 @@ def load_rlz_repair_grammar(rules_filepath):
         print("Grammar loaded successfully.\n")
         return grammar
 
-def load_bigrepair_grammar(rules_filepath):
+def load_pfp_repair_grammar(rules_filepath):
     """
-    Loads a BigRePair grammar from the .R file.
+    Loads a PFP-created RePair grammar from the .R file.
 
     The binary file is expected to be structured as follows:
     1. Alphabet Size (int): A 4-byte integer ('alpha') specifying the number
@@ -121,8 +121,8 @@ def load_bigrepair_grammar(rules_filepath):
         return grammar
 
 
-def format_rlz_repair_symbol(symbol_id, grammar):
-    """Formats a symbol ID for RLZ-RePair printing based on its type."""
+def format_original_repair_symbol(symbol_id, grammar):
+    """Formats a symbol ID for original repair printing based on its type."""
     symbol_value = grammar.get(symbol_id)
     if isinstance(symbol_value, bytes):
         # It's a terminal, return its character representation.
@@ -142,7 +142,7 @@ def format_rlz_repair_symbol(symbol_id, grammar):
         return f"?{symbol_id}?"
 
 
-def print_rlz_repair_grammar(grammar):
+def print_original_repair_grammar(grammar):
     """Prints a summary of the loaded RLZ-RePair grammar rules."""
     print("--- Parsed Grammar Rules ---")
     
@@ -168,16 +168,16 @@ def print_rlz_repair_grammar(grammar):
     for rule_id, symbols in sorted(list(non_terminals.items())):
         s1, s2 = symbols
         # Use the new helper to format the rule's components
-        formatted_s1 = format_rlz_repair_symbol(s1, grammar)
-        formatted_s2 = format_rlz_repair_symbol(s2, grammar)
+        formatted_s1 = format_original_repair_symbol(s1, grammar)
+        formatted_s2 = format_original_repair_symbol(s2, grammar)
         print(f"    {rule_id} -> ({formatted_s1},{formatted_s2})")
 
     print(f"\nTotal symbols in grammar: {len(grammar)}")
 
 
-def format_bigrepair_symbol(symbol_id, grammar):
+def format_pfp_repair_symbol(symbol_id, grammar):
     """
-    Formats a symbol ID from a BigRepair grammar for printing.
+    Formats a symbol ID from a PFP repair grammar for printing.
     It assumes symbol IDs < 256 are terminals (characters) and
     symbol IDs >= 256 are non-terminals (rules).
     """
@@ -202,8 +202,8 @@ def format_bigrepair_symbol(symbol_id, grammar):
         return f"?{symbol_id}?"
 
 
-def print_bigrepair_grammar(grammar):
-    """Prints a summary of the loaded BigRepair grammar rules."""
+def print_pfp_repair_grammar(grammar):
+    """Prints a summary of the loaded PFP repair grammar rules."""
     print("--- Parsed Grammar Rules ---")
     
     # Separate terminal and non-terminal symbols for clarity
@@ -215,8 +215,8 @@ def print_bigrepair_grammar(grammar):
     for rule_id, symbols in sorted(list(non_terminals.items())):
         s1, s2 = symbols
         # Use the new helper to format the rule's components
-        formatted_s1 = format_bigrepair_symbol(s1, grammar)
-        formatted_s2 = format_bigrepair_symbol(s2, grammar)
+        formatted_s1 = format_pfp_repair_symbol(s1, grammar)
+        formatted_s2 = format_pfp_repair_symbol(s2, grammar)
         print(f"    {rule_id} -> ({formatted_s1},{formatted_s2})")
 
     print(f"\nTotal symbols in grammar: {len(grammar)}")
@@ -249,19 +249,19 @@ def print_compressed_str(sequence):
 # A counter to ensure every node has a unique ID
 node_counter = 0
 
-def build_tree_rlz_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
+def build_tree_original_repair_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
     """
     Recursively builds the parse tree by adding nodes and edges to the graph.
 
     This corrected function properly:
     - Uses the `parsed_grammar` passed as an argument.
-    - Uses `format_rlz_repair_symbol` to create clear node labels.
+    - Uses `format_original_repair_symbol` to create clear node labels.
     - Differentiates between terminals and non-terminals to avoid crashing.
     """
     global node_counter
     
     # Get the human-readable label for the current symbol ID
-    label = str(format_symbol(symbol_id, parsed_grammar))
+    label = str(format_original_repair_symbol(symbol_id, parsed_grammar))
     
     # Get the actual value (rule or character) from the grammar
     symbol_value = parsed_grammar.get(symbol_id)
@@ -283,24 +283,24 @@ def build_tree_rlz_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
     # If the symbol is a non-terminal (a tuple), recurse for its children
     if isinstance(symbol_value, tuple):
         s1, s2 = symbol_value
-        build_tree_rlz_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
-        build_tree_rlz_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
+        build_tree_original_repair_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
+        build_tree_original_repair_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
         
     return current_node_id
 
-def build_tree_bigrepair_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
+def build_tree_pfp_repair_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
     """
     Recursively builds the parse tree by adding nodes and edges to the graph.
 
     This corrected function properly:
     - Uses the `parsed_grammar` passed as an argument.
-    - Uses `format_bigrepair_symbol` to create clear node labels.
+    - Uses `format_pfp_repair_symbol` to create clear node labels.
     - Differentiates between terminals and non-terminals to avoid crashing.
     """
     global node_counter
     
     # Get the human-readable label for the current symbol ID
-    label = str(format_bigrepair_symbol(symbol_id, parsed_grammar))
+    label = str(format_pfp_repair_symbol(symbol_id, parsed_grammar))
     
     # Get the actual value (rule or character) from the grammar
     symbol_value = parsed_grammar.get(symbol_id)
@@ -322,8 +322,8 @@ def build_tree_bigrepair_recursive(dot, symbol_id, parsed_grammar, parent_id=Non
     # If the symbol is a non-terminal (a tuple), recurse for its children
     if isinstance(symbol_value, tuple):
         s1, s2 = symbol_value
-        build_tree_bigrepair_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
-        build_tree_bigrepair_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
+        build_tree_pfp_repair_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
+        build_tree_pfp_repair_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
         
     return current_node_id
 
@@ -347,23 +347,19 @@ if __name__ == "__main__":
     print(f"Output file extension: {args.extension}\n")
 
     # Load the grammar for the specific type of software
-    if (args.program == "rlz-repair"):
-        parsed_grammar = load_rlz_repair_grammar(args.rules)
-    elif (args.program == "bigrepair"):
-        parsed_grammar = load_bigrepair_grammar(args.rules)
-    elif (args.program == "rerepair"):
-        parsed_grammar = load_rerepair_grammar(args.rules)
+    if (args.program == "repair" or args.program == "rlz-repair"):
+        parsed_grammar = load_original_repair_grammar(args.rules)
+    elif (args.program == "bigrepair" or args.program == "rerepair"):
+        parsed_grammar = load_pfp_repair_grammar(args.rules)
     else:
         raise ValueError("{args.program} is not a valid program type.")
 
     # Print the grammar rules if specified
     if (args.print_grammar):
-        if (args.program == "rlz-repair"):
-            print_rlz_repair_grammar(parsed_grammar)
-        elif (args.program == "bigrepair"):
-            print_bigrepair_grammar(parsed_grammar)
-        elif (args.program == "rerepair"):
-            print_rerepair_grammar(parsed_grammar)
+        if (args.program == "repair" or args.program == "rlz-repair"):
+            print_original_repair_grammar(parsed_grammar)
+        elif (args.program == "bigrepair" or args.program == "rerepair"):
+            print_pfp_repair_grammar(parsed_grammar)
         else:
             raise ValueError("{args.program} is not a valid program type.")
 
@@ -385,12 +381,10 @@ if __name__ == "__main__":
     dot.attr('edge', arrowhead='none')
 
     # Create a dynamic label for the root node based on the loaded sequence
-    if (args.program == "rlz-repair"):
-        sequence_labels = [str(format_rlz_repair_symbol(s, parsed_grammar)) for s in compressed_sequence]
-    elif (args.program == "bigrepair"):
-        sequence_labels = [str(format_bigrepair_symbol(s, parsed_grammar)) for s in compressed_sequence]
-    elif (args.program == "rerepair"):
-        sequence_labels = [str(format_rerepair_symbol(s, parsed_grammar)) for s in compressed_sequence]
+    if (args.program == "repair" or args.program == "rlz-repair"):
+        sequence_labels = [str(format_original_repair_symbol(s, parsed_grammar)) for s in compressed_sequence]
+    elif (args.program == "bigrepair" or args.program == "rerepair"):
+        sequence_labels = [str(format_pfp_repair_symbol(s, parsed_grammar)) for s in compressed_sequence]
     else:
         raise ValueError("{args.program} is not a valid program type.")
 
@@ -403,12 +397,10 @@ if __name__ == "__main__":
     # Build the tree for each symbol in the compressed sequence
     for symbol in compressed_sequence:
         # Pass the root_id as the parent for top-level symbols
-        if (args.program == "rlz-repair"):
-            child_root_id = build_tree_rlz_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
-        elif (args.program == "bigrepair"):
-            child_root_id = build_tree_bigrepair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
-        elif (args.program == "rerepair"):
-            child_root_id = build_tree_rerepair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
+        if (args.program == "repair" or args.program == "rlz-repair"):
+            child_root_id = build_tree_original_repair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
+        elif (args.program == "bigrepair" or args.program == "rerepair"):
+            child_root_id = build_tree_pfp_repair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
         else:
             raise ValueError("{args.program} is not a valid program type.")
 
@@ -416,7 +408,7 @@ if __name__ == "__main__":
     output_filename = args.output
     try:
         for ext in args.extension:
-            dot.render(output_filename, format=args.ext, view=False, cleanup=True)
+            dot.render(output_filename, format=ext, view=False, cleanup=True)
             print(f"\n✅ Figure saved successfully as '{output_filename}.{ext}'")
     except graphviz.backend.execute.ExecutableNotFound:
         print("\n❌ Error: Graphviz executable not found.")
