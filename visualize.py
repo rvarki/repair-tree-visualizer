@@ -141,6 +141,25 @@ def format_original_repair_symbol(symbol_id, grammar):
         # Fallback for unknown symbol types.
         return f"?{symbol_id}?"
 
+def decompress_original_repair_symbol(symbol_id, grammar, memo):
+    """Recursively decompresses a symbol to its final string, with caching."""
+    if symbol_id in memo:
+        return memo[symbol_id]
+
+    symbol_value = grammar.get(symbol_id)
+    
+    if isinstance(symbol_value, tuple): # Non-terminal
+        s1, s2 = symbol_value
+        result = decompress_original_repair_symbol(s1, grammar, memo) + decompress_original_repair_symbol(s2, grammar, memo)
+        memo[symbol_id] = result
+        return result
+    elif isinstance(symbol_value, bytes): # Terminal
+        try:
+            return symbol_value.decode('ascii')
+        except (UnicodeDecodeError, AttributeError):
+            return "" # Return empty for non-ascii bytes
+    return "" # Fallback for unknown symbols
+
 
 def print_original_repair_grammar(grammar):
     """Prints a summary of the loaded RLZ-RePair grammar rules."""
@@ -165,12 +184,15 @@ def print_original_repair_grammar(grammar):
 
     print(f"\nFound {len(non_terminals)} non-terminal rules:")
     # Sort by ID to get a consistent order and print all rules
+    decompression_cache = {} # Initialize cache for decompression
     for rule_id, symbols in sorted(list(non_terminals.items())):
         s1, s2 = symbols
         # Use the new helper to format the rule's components
         formatted_s1 = format_original_repair_symbol(s1, grammar)
         formatted_s2 = format_original_repair_symbol(s2, grammar)
-        print(f"    {rule_id} -> ({formatted_s1},{formatted_s2})")
+
+        decompressed_str = decompress_original_repair_symbol(rule_id, grammar, decompression_cache)
+        print(f"    {rule_id} -> ({formatted_s1},{formatted_s2}) | Decompresses to: \"{decompressed_str}\"")
 
     print(f"\nTotal symbols in grammar: {len(grammar)}")
 
@@ -201,6 +223,24 @@ def format_pfp_repair_symbol(symbol_id, grammar):
         # This case handles an unknown symbol with an ID >= 256.
         return f"?{symbol_id}?"
 
+def decompress_pfp_repair_symbol(symbol_id, grammar, memo):
+    """Recursively decompresses a symbol to its final string, with caching."""
+    if symbol_id in memo:
+        return memo[symbol_id]
+
+    symbol_value = grammar.get(symbol_id)
+    
+    if isinstance(symbol_value, tuple): # Non-terminal
+        s1, s2 = symbol_value
+        result = decompress_pfp_repair_symbol(s1, grammar, memo) + decompress_pfp_repair_symbol(s2, grammar, memo)
+        memo[symbol_id] = result
+        return result
+    elif symbol_id < 256: # PFP Terminal (assumes alpha=256)
+        try:
+            return chr(symbol_id)
+        except ValueError:
+            return ""
+    return ""
 
 def print_pfp_repair_grammar(grammar):
     """Prints a summary of the loaded PFP repair grammar rules."""
@@ -212,12 +252,15 @@ def print_pfp_repair_grammar(grammar):
     
     print(f"\nFound {len(non_terminals)} non-terminal rules:")
     # Sort by ID to get a consistent order and print all rules
+    decompression_cache = {} # Initialize cache for decompression
     for rule_id, symbols in sorted(list(non_terminals.items())):
         s1, s2 = symbols
         # Use the new helper to format the rule's components
         formatted_s1 = format_pfp_repair_symbol(s1, grammar)
         formatted_s2 = format_pfp_repair_symbol(s2, grammar)
-        print(f"    {rule_id} -> ({formatted_s1},{formatted_s2})")
+        # Decompress the rule to its full string representation
+        decompressed_str = decompress_pfp_repair_symbol(rule_id, grammar, decompression_cache)
+        print(f"    {rule_id} -> ({formatted_s1},{formatted_s2}) | Decompresses to: \"{decompressed_str}\"")
 
     print(f"\nTotal symbols in grammar: {len(grammar)}")
 
