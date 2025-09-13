@@ -1,6 +1,7 @@
 import argparse
 import graphviz
 import os
+import sys
 
 # Alias for types used in decompression
 INT_SIZE = 4
@@ -334,7 +335,10 @@ if __name__ == "__main__":
     parser.add_argument('-r', "--rules", type=str, help="Path to grammar rule file.", required=True)
     parser.add_argument("-o", "--output", type=str, help="Prefix of output file.", default="parse_tree")
     parser.add_argument("-e", "--extension", type=str, help="Image file extension (e.g., png, svg).", default="png")
-    parser.add_argument("-p", "--program", type=str, help="Compression program used (rlz-repair, bigrepair).", default="rlz-repair")
+    parser.add_argument("-p", "--program", type=str, help="Compression program used (repair, rlz-repair, bigrepair, rerepair).", default="rlz-repair")
+    parser.add_argument("--print_grammar", action='store_true', help="If set, print the parsed grammar rules to the console.")
+    parser.add_argument("--print_sequence", action='store_true', help="If set, print the compressed sequence to the console.")
+    parser.add_argument("--no_image", action='store_true', help="If set, do not produce the parse tree image.")
     args = parser.parse_args()
 
     print(f"Compressed sequence file location: {args.sequence}")
@@ -342,18 +346,37 @@ if __name__ == "__main__":
     print(f"Output file prefix: {args.output}")
     print(f"Output file extension: {args.extension}\n")
 
+    # Load the grammar for the specific type of software
     if (args.program == "rlz-repair"):
         parsed_grammar = load_rlz_repair_grammar(args.rules)
-    else:
+    elif (args.program == "bigrepair"):
         parsed_grammar = load_bigrepair_grammar(args.rules)
+    elif (args.program == "rerepair"):
+        parsed_grammar = load_rerepair_grammar(args.rules)
+    else:
+        raise ValueError("{args.program} is not a valid program type.")
 
-    # if (args.program == "rlz-repair"):
-    #     print_rlz_repair_grammar(parsed_grammar)
-    # else:
-    #     print_bigrepair_grammar(parsed_grammar)
+    # Print the grammar rules if specified
+    if (args.print_grammar):
+        if (args.program == "rlz-repair"):
+            print_rlz_repair_grammar(parsed_grammar)
+        elif (args.program == "bigrepair"):
+            print_bigrepair_grammar(parsed_grammar)
+        elif (args.program == "rerepair"):
+            print_rerepair_grammar(parsed_grammar)
+        else:
+            raise ValueError("{args.program} is not a valid program type.")
 
+    # Load the compressed sequence
     compressed_sequence = load_compressed_str(args.sequence)
-    #print_compressed_str(compressed_sequence)
+
+    # Print the compressed sequence if specified
+    if (args.print_sequence):
+        print_compressed_str(compressed_sequence)
+
+    # Exit if image is not required
+    if (args.no_image):
+        sys.exit()
 
     # Initialize the graph object (Digraph for Directed Graph)
     dot = graphviz.Digraph(comment='RePair Parse Tree')
