@@ -104,9 +104,6 @@ def load_bigrepair_grammar(rules_filepath):
             raise IOError(f"Error: Truncated rules data in {rules_filepath}")
         # Generate the grammar
         grammar = {}
-        # Generate the rules for the terminal symbols
-        for i in range(alpha):
-            grammar[i] = char_map[i:i+1]
         # Generate the rules for the non-terminal symbols
         for i in range(num_rules):
             rule_id = alpha + i
@@ -123,8 +120,8 @@ def load_bigrepair_grammar(rules_filepath):
         return grammar
 
 
-def format_symbol(symbol_id, grammar):
-    """Formats a symbol ID for printing based on its type."""
+def format_rlz_repair_symbol(symbol_id, grammar):
+    """Formats a symbol ID for RLZ-RePair printing based on its type."""
     symbol_value = grammar.get(symbol_id)
     if isinstance(symbol_value, bytes):
         # It's a terminal, return its character representation.
@@ -144,8 +141,8 @@ def format_symbol(symbol_id, grammar):
         return f"?{symbol_id}?"
 
 
-def print_grammar(grammar):
-    """Prints a summary of the loaded grammar rules."""
+def print_rlz_repair_grammar(grammar):
+    """Prints a summary of the loaded RLZ-RePair grammar rules."""
     print("--- Parsed Grammar Rules ---")
     
     # Separate terminal and non-terminal symbols for clarity
@@ -170,11 +167,59 @@ def print_grammar(grammar):
     for rule_id, symbols in sorted(list(non_terminals.items())):
         s1, s2 = symbols
         # Use the new helper to format the rule's components
-        formatted_s1 = format_symbol(s1, grammar)
-        formatted_s2 = format_symbol(s2, grammar)
+        formatted_s1 = format_rlz_repair_symbol(s1, grammar)
+        formatted_s2 = format_rlz_repair_symbol(s2, grammar)
         print(f"    {rule_id} -> ({formatted_s1},{formatted_s2})")
 
     print(f"\nTotal symbols in grammar: {len(grammar)}")
+
+
+def format_bigrepair_symbol(symbol_id, grammar):
+    """
+    Formats a symbol ID from a BigRepair grammar for printing.
+    It assumes symbol IDs < 256 are terminals (characters) and
+    symbol IDs >= 256 are non-terminals (rules).
+    """
+    # 1. First, check if the symbol is a terminal by its value.
+    if symbol_id < 256:
+        # It's a character. Convert the integer ID to its char equivalent.
+        char = chr(symbol_id)
+        # For clean output, check if the character is printable.
+        if char.isprintable():
+            return f"'{char}'"
+        else:
+            # If not printable (e.g., null, tab), show its byte ID instead.
+            return f"byte({symbol_id})"
+
+    # 2. If the symbol is not a terminal, it must be a non-terminal rule.
+    symbol_value = grammar.get(symbol_id)
+    if isinstance(symbol_value, tuple):
+        # It's a rule, so just return its integer ID as a string.
+        return str(symbol_id)
+    else:
+        # This case handles an unknown symbol with an ID >= 256.
+        return f"?{symbol_id}?"
+
+
+def print_bigrepair_grammar(grammar):
+    """Prints a summary of the loaded BigRepair grammar rules."""
+    print("--- Parsed Grammar Rules ---")
+    
+    # Separate terminal and non-terminal symbols for clarity
+    terminals = {k: v for k, v in grammar.items() if isinstance(v, bytes)}
+    non_terminals = {k: v for k, v in grammar.items() if isinstance(v, tuple)}
+    
+    print(f"\nFound {len(non_terminals)} non-terminal rules:")
+    # Sort by ID to get a consistent order and print all rules
+    for rule_id, symbols in sorted(list(non_terminals.items())):
+        s1, s2 = symbols
+        # Use the new helper to format the rule's components
+        formatted_s1 = format_bigrepair_symbol(s1, grammar)
+        formatted_s2 = format_bigrepair_symbol(s2, grammar)
+        print(f"    {rule_id} -> ({formatted_s1},{formatted_s2})")
+
+    print(f"\nTotal symbols in grammar: {len(grammar)}")
+
 
 def load_compressed_str(sequence_filepath):
     """Loads the compressed .C sequence file"""
@@ -203,13 +248,13 @@ def print_compressed_str(sequence):
 # A counter to ensure every node has a unique ID
 node_counter = 0
 
-def build_tree_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
+def build_tree_rlz_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
     """
     Recursively builds the parse tree by adding nodes and edges to the graph.
 
     This corrected function properly:
     - Uses the `parsed_grammar` passed as an argument.
-    - Uses `format_symbol` to create clear node labels.
+    - Uses `format_rlz_repair_symbol` to create clear node labels.
     - Differentiates between terminals and non-terminals to avoid crashing.
     """
     global node_counter
@@ -237,8 +282,47 @@ def build_tree_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
     # If the symbol is a non-terminal (a tuple), recurse for its children
     if isinstance(symbol_value, tuple):
         s1, s2 = symbol_value
-        build_tree_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
-        build_tree_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
+        build_tree_rlz_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
+        build_tree_rlz_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
+        
+    return current_node_id
+
+def build_tree_bigrepair_recursive(dot, symbol_id, parsed_grammar, parent_id=None):
+    """
+    Recursively builds the parse tree by adding nodes and edges to the graph.
+
+    This corrected function properly:
+    - Uses the `parsed_grammar` passed as an argument.
+    - Uses `format_bigrepair_symbol` to create clear node labels.
+    - Differentiates between terminals and non-terminals to avoid crashing.
+    """
+    global node_counter
+    
+    # Get the human-readable label for the current symbol ID
+    label = str(format_bigrepair_symbol(symbol_id, parsed_grammar))
+    
+    # Get the actual value (rule or character) from the grammar
+    symbol_value = parsed_grammar.get(symbol_id)
+    
+    # Create a unique ID for the graphviz node
+    current_node_id = f"node{node_counter}"
+    node_counter += 1
+    
+    # Add the node to the graph, with a different shape for terminals vs. non-terminals
+    if isinstance(symbol_value, tuple):
+        dot.node(current_node_id, label=label, shape='box')  # Non-terminal
+    else:
+        dot.node(current_node_id, label=label, shape='plaintext')  # Terminal
+    
+    # Connect this node to its parent, if one exists
+    if parent_id:
+        dot.edge(parent_id, current_node_id)
+    
+    # If the symbol is a non-terminal (a tuple), recurse for its children
+    if isinstance(symbol_value, tuple):
+        s1, s2 = symbol_value
+        build_tree_bigrepair_recursive(dot, s1, parsed_grammar, parent_id=current_node_id)
+        build_tree_bigrepair_recursive(dot, s2, parsed_grammar, parent_id=current_node_id)
         
     return current_node_id
 
@@ -263,7 +347,11 @@ if __name__ == "__main__":
     else:
         parsed_grammar = load_bigrepair_grammar(args.rules)
 
-    #print_grammar(parsed_grammar)
+    # if (args.program == "rlz-repair"):
+    #     print_rlz_repair_grammar(parsed_grammar)
+    # else:
+    #     print_bigrepair_grammar(parsed_grammar)
+
     compressed_sequence = load_compressed_str(args.sequence)
     #print_compressed_str(compressed_sequence)
 
@@ -274,7 +362,11 @@ if __name__ == "__main__":
     dot.attr('edge', arrowhead='none')
 
     # Create a dynamic label for the root node based on the loaded sequence
-    sequence_labels = [str(format_symbol(s, parsed_grammar)) for s in compressed_sequence]
+    if (args.program == "rlz-repair"):
+        sequence_labels = [str(format_rlz_repair_symbol(s, parsed_grammar)) for s in compressed_sequence]
+    else:
+        sequence_labels = [str(format_bigrepair_symbol(s, parsed_grammar)) for s in compressed_sequence]
+
     root_label = f"Compressed Sequence\n({' '.join(sequence_labels)})"
 
     # Create a single invisible root node to connect the sequence
@@ -284,7 +376,10 @@ if __name__ == "__main__":
     # Build the tree for each symbol in the compressed sequence
     for symbol in compressed_sequence:
         # Pass the root_id as the parent for top-level symbols
-        child_root_id = build_tree_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
+        if (args.program == "rlz-repair"):
+            child_root_id = build_tree_rlz_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
+        else:
+            child_root_id = build_tree_bigrepair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
 
     # Render the graph to a file. 
     output_filename = args.output
