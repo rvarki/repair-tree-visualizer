@@ -334,7 +334,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--sequence", type=str, help="Path to the compressed sequence file.", required=True)
     parser.add_argument('-r', "--rules", type=str, help="Path to grammar rule file.", required=True)
     parser.add_argument("-o", "--output", type=str, help="Prefix of output file.", default="parse_tree")
-    parser.add_argument("-e", "--extension", type=str, help="Image file extension (e.g., png, svg).", default="png")
+    parser.add_argument("-e", "--extension", nargs='+', type=str, help="One or more image file extensions (e.g., png svg jpg).", default=["png"])
     parser.add_argument("-p", "--program", type=str, help="Compression program used (repair, rlz-repair, bigrepair, rerepair).", default="rlz-repair")
     parser.add_argument("--print_grammar", action='store_true', help="If set, print the parsed grammar rules to the console.")
     parser.add_argument("--print_sequence", action='store_true', help="If set, print the compressed sequence to the console.")
@@ -387,8 +387,12 @@ if __name__ == "__main__":
     # Create a dynamic label for the root node based on the loaded sequence
     if (args.program == "rlz-repair"):
         sequence_labels = [str(format_rlz_repair_symbol(s, parsed_grammar)) for s in compressed_sequence]
-    else:
+    elif (args.program == "bigrepair"):
         sequence_labels = [str(format_bigrepair_symbol(s, parsed_grammar)) for s in compressed_sequence]
+    elif (args.program == "rerepair"):
+        sequence_labels = [str(format_rerepair_symbol(s, parsed_grammar)) for s in compressed_sequence]
+    else:
+        raise ValueError("{args.program} is not a valid program type.")
 
     root_label = f"Compressed Sequence\n({' '.join(sequence_labels)})"
 
@@ -401,14 +405,19 @@ if __name__ == "__main__":
         # Pass the root_id as the parent for top-level symbols
         if (args.program == "rlz-repair"):
             child_root_id = build_tree_rlz_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
-        else:
+        elif (args.program == "bigrepair"):
             child_root_id = build_tree_bigrepair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
+        elif (args.program == "rerepair"):
+            child_root_id = build_tree_rerepair_recursive(dot, symbol, parsed_grammar, parent_id=root_id)
+        else:
+            raise ValueError("{args.program} is not a valid program type.")
 
     # Render the graph to a file. 
     output_filename = args.output
     try:
-        dot.render(output_filename, format=args.extension, view=False, cleanup=True)
-        print(f"\n✅ Figure saved successfully as '{output_filename}.{args.extension}'")
+        for ext in args.extension:
+            dot.render(output_filename, format=args.ext, view=False, cleanup=True)
+            print(f"\n✅ Figure saved successfully as '{output_filename}.{ext}'")
     except graphviz.backend.execute.ExecutableNotFound:
         print("\n❌ Error: Graphviz executable not found.")
         print("Please ensure Graphviz is installed and in your system's PATH.")
