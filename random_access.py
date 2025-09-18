@@ -245,10 +245,86 @@ def random_access(top_level_sequence, grammar, lengths, position):
                 position -= symbol_len
 
 
+def calculate_grammar_depth_stats(grammar, top_level_sequence, lengths, uncompressed_size):
+    """
+    Calculates and prints the max and average depth of the parse tree forest.
+
+    Args:
+        grammar (dict): The grammar rules.
+        top_level_sequence (list[int]): The sequence of top-level symbols.
+        lengths (dict): A dict mapping symbol IDs to their expansion length.
+        uncompressed_size (int): The total length of the original text.
+    """
+    depth_cache = {}
+    leaf_depth_sum_cache = {}
+
+    def get_max_depth(symbol_id):
+        # Memoization: Return cached result if available
+        if symbol_id in depth_cache:
+            return depth_cache[symbol_id]
+        
+        # Base case: A terminal symbol has a depth of 0 in its own subtree.
+        if symbol_id not in grammar or not isinstance(grammar.get(symbol_id), tuple):
+            depth_cache[symbol_id] = 0
+            return 0
+
+        # Recursive step: Depth is 1 + max depth of its children's subtrees.
+        s1, s2 = grammar[symbol_id]
+        depth = 1 + max(get_max_depth(s1), get_max_depth(s2))
+        depth_cache[symbol_id] = depth
+        return depth
+
+    def get_leaf_depth_sum(symbol_id):
+        # Memoization: Return cached result if available
+        if symbol_id in leaf_depth_sum_cache:
+            return leaf_depth_sum_cache[symbol_id]
+
+        # Base case: A terminal symbol is a leaf at depth 0 (relative to itself).
+        if symbol_id not in grammar or not isinstance(grammar.get(symbol_id), tuple):
+            leaf_depth_sum_cache[symbol_id] = 0
+            return 0
+        
+        # Recursive step for non-terminals
+        s1, s2 = grammar[symbol_id]
+        
+        # Get the sum of leaf depths from children subtrees
+        sum1 = get_leaf_depth_sum(s1)
+        sum2 = get_leaf_depth_sum(s2)
+        
+        # The total sum is the sum from children, plus 1 for each leaf in
+        # their expansions, because they are all now one level deeper.
+        # The number of leaves is given by the `lengths` dictionary.
+        total_sum = sum1 + sum2 + lengths[s1] + lengths[s2]
+        
+        leaf_depth_sum_cache[symbol_id] = total_sum
+        return total_sum
+
+    # --- Main Calculation ---
+    max_overall_depth = 0
+    total_leaf_depth_sum = 0
+    
+    print("Calculating parse tree depth statistics...")
+    
+    # Iterate through the "forest" of trees in the top-level sequence
+    for symbol in top_level_sequence:
+        max_overall_depth = max(max_overall_depth, get_max_depth(symbol))
+        total_leaf_depth_sum += get_leaf_depth_sum(symbol)
+    
+    # Calculate average depth
+    if uncompressed_size > 0:
+        average_depth = total_leaf_depth_sum / uncompressed_size
+    else:
+        average_depth = 0
+
+    print("\n--- Depth Statistics ---")
+    print(f"Maximum parse tree depth: {max_overall_depth}")
+    print(f"Average leaf depth: {average_depth:.4f}")
+    print("------------------------\n")
+
 
 # --- Main ---
 if __name__ == "__main__":
-
+    # sys.setrecursionlimit(20000)
     parser = argparse.ArgumentParser(description="Print the parse tree of RePair grammars")
     parser.add_argument("-s", "--sequence", type=str, help="Path to the compressed sequence file.", required=True)
     parser.add_argument('-r', "--rules", type=str, help="Path to grammar rule file.", required=True)
@@ -256,6 +332,8 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--iteration", type=int, help="Number of random positions to test", default=10000)
     parser.add_argument("-p", "--program", type=str, help="Compression program used (repair, rlz-repair, bigrepair, rerepair).", default="rlz-repair")
     parser.add_argument("--seed", type=int, help="Seed for random number generator", default=100)
+    parser.add_argument("--depth", action="store_true", help="Calculate the depth of the parse tree.")
+    parser.add_argument("--no_ra", action="store_true", help="Do not perform random access test.")
     args = parser.parse_args()
 
     print(f"Compressed sequence file location: {args.sequence}")
@@ -281,28 +359,33 @@ if __name__ == "__main__":
     # Pass the seed to RNG
     random.seed(args.seed)
     
+    # Calculate depth of parse tree
+    if (args.depth):
+        calculate_grammar_depth_stats(parsed_grammar, compressed_sequence, lengths, uncompressed_size)
+
     # RA test
-    total_time = 0
-    output_fp = args.output + ".txt"
-    with open(output_fp, "w") as outfile:
-        for i in range(args.iteration):
-            random_pos = random.randint(0, uncompressed_size - 1) # Since inclusive ends
-            start_time = time.perf_counter()
-            ra_char = random_access(compressed_sequence, parsed_grammar, lengths, random_pos)
-            end_time = time.perf_counter()
-            elapsed_time = end_time - start_time
-            total_time += elapsed_time
-            
-            if i % 1000 == 0: # Print progress periodically
-                print(f"Completed {i}/{args.iteration} queries...")
+    if (not args.no_ra):
+        total_time = 0
+        output_fp = args.output + ".txt"
+        with open(output_fp, "w") as outfile:
+            for i in range(args.iteration):
+                random_pos = random.randint(0, uncompressed_size - 1) # Since inclusive ends
+                start_time = time.perf_counter()
+                ra_char = random_access(compressed_sequence, parsed_grammar, lengths, random_pos)
+                end_time = time.perf_counter()
+                elapsed_time = end_time - start_time
+                total_time += elapsed_time
+                
+                if i % 1000 == 0: # Print progress periodically
+                    print(f"Completed {i}/{args.iteration} queries...")
 
-            if args.program in ("repair", "rlz-repair"):
-                outfile.write(f"pos: {random_pos} value: {format_original_repair_symbol(ra_char, parsed_grammar)}\n")
-            else: 
-                outfile.write(f"pos: {random_pos} value: {format_pfp_repair_symbol(ra_char, parsed_grammar)}\n")
+                if args.program in ("repair", "rlz-repair"):
+                    outfile.write(f"pos: {random_pos} value: {format_original_repair_symbol(ra_char, parsed_grammar)}\n")
+                else: 
+                    outfile.write(f"pos: {random_pos} value: {format_pfp_repair_symbol(ra_char, parsed_grammar)}\n")
 
-    print("\n--- Benchmark Complete ---")
-    print(f"It took {total_time:.4f} seconds to perform {args.iteration} random access queries.")
-    average_time = total_time / args.iteration
-    print(f"It took {average_time:.6f} seconds on average per random access query.")
-    print(f"Results saved to {output_fp}")
+        print("\n--- Benchmark Complete ---")
+        print(f"It took {total_time:.4f} seconds to perform {args.iteration} random access queries.")
+        average_time = total_time / args.iteration
+        print(f"It took {average_time:.6f} seconds on average per random access query.")
+        print(f"Results saved to {output_fp}")
