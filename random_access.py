@@ -319,6 +319,7 @@ def calculate_grammar_depth_stats(grammar, top_level_sequence, lengths, uncompre
     print("\n--- Depth Statistics ---")
     print(f"Maximum parse tree depth: {max_overall_depth}")
     print(f"Average leaf depth: {average_depth:.4f}")
+    print(f"The number of leaves (uncompressed file size): {uncompressed_size}")
     print("------------------------\n")
 
 
